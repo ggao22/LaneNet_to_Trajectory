@@ -24,7 +24,6 @@ def main():
     t1_start = perf_counter()
 
     vtt = DualLanesToTrajectory(lane_left_pts,lane_right_pts)
-    vtt.update_centerpoints()
     matching_pts = vtt.get_matching_points()
     centerpts = vtt.get_centerpoints()
     spl = vtt.get_spline()

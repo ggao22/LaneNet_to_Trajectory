@@ -2,7 +2,7 @@ import numpy as np
 from time import perf_counter
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
-from LaneNetToTrajectory import LaneProcessing
+from LaneNetToTrajectory import LaneProcessing, DualLanesToTrajectory
 
 
 
@@ -154,3 +154,29 @@ full_lane_pts = lp.get_full_lane_pts()
 #     lane_pts = full_lane_pts[i]
 #     plt.scatter(lane_pts[:,0],lane_pts[:,1])
 # plt.show()
+
+
+trajectories = []
+centerpoints = []
+splines = []
+for i in range(len(full_lane_pts)):
+    if not i: continue
+    traj = DualLanesToTrajectory(full_lane_pts[i-1],full_lane_pts[i])
+    trajectories.append(traj)
+    centerpoints.append(traj.get_centerpoints())
+    splines.append(traj.get_spline())
+
+max_y = 0
+print(centerpoints)
+for lane in centerpoints:
+    new_max = max(lane[1])
+    if new_max > max_y: max_y = new_max
+
+ys = np.arange(1, max_y, 0.1)
+for i in range(len(full_lane_pts)):
+    lane_pts = full_lane_pts[i]
+    plt.scatter(lane_pts[:,0],lane_pts[:,1])
+    if i == len(full_lane_pts)-1: continue
+    plt.plot(splines[i](ys), ys)
+    plt.scatter(centerpoints[i][0],centerpoints[i][1])
+plt.show()

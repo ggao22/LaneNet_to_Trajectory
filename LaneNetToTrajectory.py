@@ -10,10 +10,10 @@ class LaneProcessing():
         self.full_lane_pts = full_lane_pts
         self.input_image_x = input_image_x
         self.input_image_y = input_image_y
-        self.full_lanes_transformation()
-        self.ordering_lanes()
+        self._full_lanes_transformation()
+        self._ordering_lanes()
 
-    def ordering_lanes(self):
+    def _ordering_lanes(self):
         max_y_pts = []
         min_y_pts = []
         min_y_VAL = []
@@ -38,18 +38,20 @@ class LaneProcessing():
         lane_ordering = np.array(lane_ordering,dtype=dtype)
         lane_ordering = np.sort(lane_ordering, order="x_values")
 
-        print(lane_ordering)
-
         ordered_lane_pts = []
-        for x_val,lane_pts in lane_ordering:
+        for _,lane_pts in lane_ordering:
             ordered_lane_pts.append(lane_pts)
 
         self.full_lane_pts = ordered_lane_pts
 
 
-    def full_lanes_transformation(self):
+    def _full_lanes_transformation(self):
         for i in range(len(self.full_lane_pts)):
             self.full_lane_pts[i] = ([0,self.input_image_y] - self.full_lane_pts[i]) * [-1,1]
+            idx = np.argsort(self.full_lane_pts[i], axis=0)
+            self.full_lane_pts[i][:,0] = np.take_along_axis(self.full_lane_pts[i][:,0], idx[:,1], axis=0)
+            self.full_lane_pts[i][:,1] = np.take_along_axis(self.full_lane_pts[i][:,1], idx[:,1], axis=0)
+
 
 
     def get_full_lane_pts(self):
@@ -70,7 +72,8 @@ class DualLanesToTrajectory():
 
         self.N_centerpts = N_centerpts
         self.result_status = True
-        self.centerpoints_updated = False
+
+        self._update_centerpoints()
 
 
     def _pre_processing_lane_pts(self):
@@ -118,7 +121,7 @@ class DualLanesToTrajectory():
             matching_pts = []
             i = 0
             for idx in starting_pts_index:
-                theta = math.atan(segment_vectors[idx][1]/segment_vectors[idx][0]) #correct
+                theta = math.atan(segment_vectors[idx][1]/segment_vectors[idx][0] if segment_vectors[idx][0] != 0 else 0)
                 x,y = 0,0
                 if theta > 0:
                     x = lacking_dists[i] * math.cos(theta) + lane_pts[idx][0]
@@ -140,17 +143,15 @@ class DualLanesToTrajectory():
 
     def update_input(self,lane_left_pts,lane_right_pts):
         self.lane_pts = [np.array(lane_left_pts),np.array(lane_right_pts)]
-        self.centerpoints_updated = False
+        self._update_centerpoints()
 
 
-    def update_centerpoints(self):
-        if not self.centerpoints_updated:
-            self._pre_processing_lane_pts()
-            if self.result_status: 
-                self._cal_segment_param()
-                self._cal_centerpts_pairs()
-                self._cal_centerpts()
-                self.centerpoints_updated = True
+    def _update_centerpoints(self):
+        self._pre_processing_lane_pts()
+        if self.result_status: 
+            self._cal_segment_param()
+            self._cal_centerpts_pairs()
+            self._cal_centerpts()
 
 
     def get_centerpoints(self):
