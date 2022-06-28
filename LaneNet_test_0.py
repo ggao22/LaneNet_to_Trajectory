@@ -146,6 +146,8 @@ full_lanenet_output = [np.array([[482, 248],
 #     plt.scatter(lane_pts[:,0],lane_pts[:,1])
 # plt.show()
 
+t1_start = perf_counter()
+
 lp = LaneProcessing(full_lanenet_output,1280,720)
 full_lane_pts = lp.get_full_lane_pts()
 
@@ -167,10 +169,14 @@ for i in range(len(full_lane_pts)):
     splines.append(traj.get_spline())
 
 max_y = 0
-print(centerpoints)
 for lane in centerpoints:
     new_max = max(lane[1])
     if new_max > max_y: max_y = new_max
+
+
+t1_stop = perf_counter()
+print("Centerlane generation finished in", t1_stop-t1_start, "seconds")
+
 
 ys = np.arange(1, max_y, 0.1)
 for i in range(len(full_lane_pts)):
