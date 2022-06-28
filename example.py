@@ -2,7 +2,7 @@ import numpy as np
 from time import perf_counter
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
-from Trajectory import VectorToTrajectory
+from LaneNetToTrajectory import DualLanesToTrajectory
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
 
     t1_start = perf_counter()
 
-    vtt = VectorToTrajectory(lane_left_pts,lane_right_pts)
+    vtt = DualLanesToTrajectory(lane_left_pts,lane_right_pts)
     vtt.update_centerpoints()
     matching_pts = vtt.get_matching_points()
     centerpts = vtt.get_centerpoints()

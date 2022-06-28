@@ -3,8 +3,61 @@ from scipy.interpolate import UnivariateSpline
 import math
 
 
+class LaneProcessing():
+    """Takes in LaneNet's raw output vectors and process then into left to right ordered lanes"""
 
-class VectorToTrajectory():
+    def __init__(self,full_lane_pts,input_image_x,input_image_y):
+        self.full_lane_pts = full_lane_pts
+        self.input_image_x = input_image_x
+        self.input_image_y = input_image_y
+        self.full_lanes_transformation()
+        self.ordering_lanes()
+
+    def ordering_lanes(self):
+        max_y_pts = []
+        min_y_pts = []
+        min_y_VAL = []
+
+        for lane in self.full_lane_pts:
+            max_y_pts.append(lane[np.argmax(lane[:,1])])
+            min_y_pts.append(lane[np.argmin(lane[:,1])])
+            min_y_VAL.append(lane[np.argmin(lane[:,1]),1])
+
+        max_y_pts = np.array(max_y_pts)
+        min_y_pts = np.array(min_y_pts)
+        maxmin_y_val = max(min_y_VAL)
+
+        slopes = (max_y_pts[:,1]-min_y_pts[:,1])/(max_y_pts[:,0]-min_y_pts[:,0])
+        intercepts = min_y_pts[:,1] - slopes*min_y_pts[:,0]
+        order_x_values = (maxmin_y_val - intercepts)/slopes
+
+        lane_ordering = []
+        for i in range(len(order_x_values)):
+            lane_ordering.append((order_x_values[i],self.full_lane_pts[i]))
+        dtype = [("x_values",float),("lane_pts",list)]
+        lane_ordering = np.array(lane_ordering,dtype=dtype)
+        lane_ordering = np.sort(lane_ordering, order="x_values")
+
+        print(lane_ordering)
+
+        ordered_lane_pts = []
+        for x_val,lane_pts in lane_ordering:
+            ordered_lane_pts.append(lane_pts)
+
+        self.full_lane_pts = ordered_lane_pts
+
+
+    def full_lanes_transformation(self):
+        for i in range(len(self.full_lane_pts)):
+            self.full_lane_pts[i] = ([0,self.input_image_y] - self.full_lane_pts[i]) * [-1,1]
+
+
+    def get_full_lane_pts(self):
+        return self.full_lane_pts
+
+
+
+class DualLanesToTrajectory():
     """Takes two x by 2 shaped lane line point vector arrays and outputs estimated centerlines."""
 
     def __init__(self,lane_left_pts,lane_right_pts,N_centerpts=10):
