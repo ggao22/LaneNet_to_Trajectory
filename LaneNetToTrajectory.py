@@ -6,10 +6,10 @@ import math
 class LaneProcessing():
     """Takes in LaneNet's raw output vectors and process then into left to right ordered lanes"""
 
-    def __init__(self,full_lane_pts,input_image_x,input_image_y):
+    def __init__(self,full_lane_pts,x_size,y_size):
         self.full_lane_pts = full_lane_pts
-        self.input_image_x = input_image_x
-        self.input_image_y = input_image_y
+        self.input_image_x = x_size
+        self.input_image_y = y_size
         self._full_lanes_transformation()
         self._ordering_lanes()
 

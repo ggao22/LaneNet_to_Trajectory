@@ -178,6 +178,7 @@ t1_stop = perf_counter()
 print("Centerlane generation finished in", t1_stop-t1_start, "seconds")
 
 
+print(centerpoints)
 ys = np.arange(1, max_y, 0.1)
 for i in range(len(full_lane_pts)):
     lane_pts = full_lane_pts[i]
@@ -185,4 +186,4 @@ for i in range(len(full_lane_pts)):
     if i == len(full_lane_pts)-1: continue
     plt.plot(splines[i](ys), ys)
     plt.scatter(centerpoints[i][0],centerpoints[i][1])
-plt.show()
+plt.show()  
