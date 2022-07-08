@@ -10,8 +10,9 @@ class LaneProcessing():
         self.full_lane_pts = full_lane_pts
         self.image_width = image_width
         self.image_height = image_height
-        self._full_lanes_transformation()
-        self._ordering_lanes()
+        if self.full_lane_pts:
+            self._full_lanes_transformation()
+            self._ordering_lanes()
 
     def _ordering_lanes(self):
         max_y_pts = []
@@ -47,7 +48,7 @@ class LaneProcessing():
 
     def _full_lanes_transformation(self):
         for i in range(len(self.full_lane_pts)):
-            self.full_lane_pts[i] = ([0,self.input_image_y] - self.full_lane_pts[i]) * [-1,1]
+            self.full_lane_pts[i] = ([0,self.image_height] - self.full_lane_pts[i]) * [-1,1]
             idx = np.argsort(self.full_lane_pts[i], axis=0)
             self.full_lane_pts[i][:,0] = np.take_along_axis(self.full_lane_pts[i][:,0], idx[:,1], axis=0)
             self.full_lane_pts[i][:,1] = np.take_along_axis(self.full_lane_pts[i][:,1], idx[:,1], axis=0)
