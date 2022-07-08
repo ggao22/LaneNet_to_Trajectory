@@ -47,6 +47,9 @@ class LaneProcessing():
 
 
     def _full_lanes_transformation(self):
+        for array in self.full_lane_pts:
+            if array.size == 0:
+                del array
         for i in range(len(self.full_lane_pts)):
             self.full_lane_pts[i] = ([0,self.image_height] - self.full_lane_pts[i]) * [-1,1]
             idx = np.argsort(self.full_lane_pts[i], axis=0)
