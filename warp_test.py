@@ -1,10 +1,7 @@
 import numpy as np
-from time import perf_counter
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import figure
 from LaneNetToTrajectory import LaneProcessing, DualLanesToTrajectory
-
-
+import cv2
 
 full_lanenet_output = [np.array([[482, 248],
        [500, 261],
@@ -139,52 +136,46 @@ full_lanenet_output = [np.array([[482, 248],
        [ 21, 361]])]
 
 
+import time
 
-# Original Dataset
-# for i in range(len(full_lanenet_output)):
-#     lane_pts = full_lanenet_output[i]
-#     plt.scatter(lane_pts[:,0],lane_pts[:,1])
-# plt.show()
+t1 = time.time()
 
-t1_start = perf_counter()
+image_width = 1280.0
+image_height = 720.0
 
-lp = LaneProcessing(full_lanenet_output,1280,720)
+lp = LaneProcessing(full_lanenet_output,image_width,image_height,max_lane_y=480,WARP_RADIUS=20)
 full_lane_pts = lp.get_full_lane_pts()
 
-# After Processing
-# for i in range(len(full_lane_pts)):
-#     lane_pts = full_lane_pts[i]
-#     plt.scatter(lane_pts[:,0],lane_pts[:,1])
-# plt.show()
+
+plt.subplot(211)
+for lane in full_lane_pts:
+    plt.scatter(lane[:,0],lane[:,1])
+
+lp.auto_warp_radius_calibration(FRAME_BOTTOM_PHYSICAL_WIDTH=4.0)
+
+print(lp.get_wp_to_m_coeff())
+
+plt.subplot(212)
+physical_fullpts = lp.get_physical_fullpts()
+
+print(f"Warp done in {time.time()-t1} seconds.")
+
+for lane in physical_fullpts:
+    plt.scatter(lane[:,0],lane[:,1])
 
 
 trajectories = []
 centerpoints = []
-splines = []
-for i in range(len(full_lane_pts)):
+for i in range(len(physical_fullpts)):
     if not i: continue
-    traj = DualLanesToTrajectory(full_lane_pts[i-1],full_lane_pts[i])
+    traj = DualLanesToTrajectory(physical_fullpts[i-1],physical_fullpts[i])
     trajectories.append(traj)
     centerpoints.append(traj.get_centerpoints())
-    splines.append(traj.get_spline())
 
-max_y = 0
-for lane in centerpoints:
-    new_max = max(lane[1])
-    if new_max > max_y: max_y = new_max
-
-
-t1_stop = perf_counter()
-print("Centerlane generation finished in", t1_stop-t1_start, "seconds")
-
-
-print(centerpoints)
-ys = np.arange(1, max_y, 0.1)
-for i in range(len(full_lane_pts)):
-    lane_pts = full_lane_pts[i]
-    plt.scatter(lane_pts[:,0],lane_pts[:,1])
-    if i == len(full_lane_pts)-1: continue
-    plt.plot(splines[i](ys), ys)
-    print(splines[i])
+for i in range(len(physical_fullpts)):
+    if i == len(physical_fullpts)-1: continue
     plt.scatter(centerpoints[i][0],centerpoints[i][1])
+
 plt.show()  
+
+

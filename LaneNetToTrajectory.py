@@ -1,15 +1,23 @@
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 import math
+import cv2
 
 
 class LaneProcessing():
     """Takes in LaneNet's raw output vectors and process then into left to right ordered lanes"""
 
-    def __init__(self,full_lane_pts,image_width,image_height):
+    def __init__(self,full_lane_pts,image_width,image_height,max_lane_y=420,WARP_RADIUS=64):
         self.full_lane_pts = full_lane_pts
         self.image_width = image_width
         self.image_height = image_height
+        self.max_lane_y = max_lane_y
+        self.WARP_RADIUS = WARP_RADIUS
+        self.M = np.empty(shape=(0,0))
+
+        # Warped Pixel to Meter Conversion Coeff.
+        self.WP_TO_M_Coeff = [1,1]
+
         if self.full_lane_pts:
             self._full_lanes_transformation()
             self._ordering_lanes()
@@ -45,7 +53,6 @@ class LaneProcessing():
 
         self.full_lane_pts = ordered_lane_pts
 
-
     def _full_lanes_transformation(self):
         for array in self.full_lane_pts:
             if array.size == 0:
@@ -56,11 +63,87 @@ class LaneProcessing():
             self.full_lane_pts[i][:,0] = np.take_along_axis(self.full_lane_pts[i][:,0], idx[:,1], axis=0)
             self.full_lane_pts[i][:,1] = np.take_along_axis(self.full_lane_pts[i][:,1], idx[:,1], axis=0)
 
-
-
     def get_full_lane_pts(self):
         return self.full_lane_pts
 
+    def auto_warp_radius_calibration(self,FRAME_BOTTOM_PHYSICAL_WIDTH=None):
+        """Auto calibrates the warp radius given lane lines of straight line lanes"""
+        if len(self.full_lane_pts) >= 2:
+
+            Y_MAX_CUTOFF = self.max_lane_y
+            X_MAX_CUTOFF = self.image_width
+            src = np.float32([[0, 0], [X_MAX_CUTOFF, 0], [0, Y_MAX_CUTOFF], [X_MAX_CUTOFF, Y_MAX_CUTOFF]])
+            self.WARP_RADIUS = X_MAX_CUTOFF/20
+            warp_r_temp = self.WARP_RADIUS
+
+            error = float('inf')
+            while abs(error) > 2:
+                self.WARP_RADIUS = warp_r_temp
+                dst = np.float32([[X_MAX_CUTOFF/2 - self.WARP_RADIUS, 0], [X_MAX_CUTOFF/2 + self.WARP_RADIUS, 0], [0, Y_MAX_CUTOFF], [X_MAX_CUTOFF, Y_MAX_CUTOFF]])
+                self.M = np.array(cv2.getPerspectiveTransform(src, dst))
+
+                self._warp_full_lane_pts()
+                pt1 = self.warped_fullpts[2][0]
+                pt2 = self.warped_fullpts[2][-1]
+                pt3 = self.warped_fullpts[3][0]
+                pt4 = self.warped_fullpts[3][-1]
+                line1 = np.poly1d(np.polyfit([pt1[1],pt2[1]],[pt1[0],pt2[0]],deg=1))
+                line2 = np.poly1d(np.polyfit([pt3[1],pt4[1]],[pt3[0],pt4[0]],deg=1))
+                error = abs(line2(self.max_lane_y)-line1(self.max_lane_y)) - abs(line2(0)-line1(0)) # vector
+                warp_r_temp += error/6.0
+
+                print(self.WARP_RADIUS)
+            #     print(error)
+
+            # import matplotlib.pyplot as plt
+            # y = np.linspace(0, 480, 100)
+            # plt.plot(line1(y),y)
+            # plt.plot(line2(y),y)
+
+            if FRAME_BOTTOM_PHYSICAL_WIDTH:
+                self.WP_TO_M_Coeff[0] = FRAME_BOTTOM_PHYSICAL_WIDTH/(self.WARP_RADIUS*2)
+
+        else:
+            raise
+
+    def _warp_full_lane_pts(self):
+        appended_lane = []
+        for lane in self.full_lane_pts:
+            lane = np.append(lane,np.ones([len(lane),1]),1)
+            appended_lane.append(lane)
+        
+        if self.M.size == 0:
+            Y_MAX_CUTOFF = self.max_lane_y
+            X_MAX_CUTOFF = self.image_width
+            src = np.float32([[0, 0], [X_MAX_CUTOFF, 0], [0, Y_MAX_CUTOFF], [X_MAX_CUTOFF, Y_MAX_CUTOFF]])
+            dst = np.float32([[X_MAX_CUTOFF/2 - self.WARP_RADIUS, 0], [X_MAX_CUTOFF/2 + self.WARP_RADIUS, 0], [0, Y_MAX_CUTOFF], [X_MAX_CUTOFF, Y_MAX_CUTOFF]])
+            self.M = np.array(cv2.getPerspectiveTransform(src, dst))
+
+        self.warped_fullpts = []
+        for lane in appended_lane:
+            warped_lane = []
+            for pt in lane: 
+                f = self.M.dot(pt.reshape(3,1)).reshape(3,)
+                warped_lane.append([f[0]/f[2], f[1]/f[2]])
+            self.warped_fullpts.append(np.array(warped_lane))
+        
+        
+    def get_wp_to_m_coeff(self):
+        return self.WP_TO_M_Coeff
+
+    def get_physical_fullpts(self):
+        self._warp_full_lane_pts()
+        # import matplotlib.pyplot as plt
+        self.physical_fullpts = []
+        for lane in self.warped_fullpts:
+            # print(lane)
+            physical_lane = lane * self.WP_TO_M_Coeff
+            # print(physical_lane)
+            # print()
+            # plt.scatter(physical_lane[:,0],physical_lane[:,1])
+            self.physical_fullpts.append(physical_lane)
+
+        return self.physical_fullpts
 
 
 class DualLanesToTrajectory():
