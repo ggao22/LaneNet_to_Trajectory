@@ -35,6 +35,9 @@ class LaneProcessing():
         return self.full_lane_pts
 
     def _ordering_lanes(self):
+        if not self.full_lane_pts:
+            return
+
         max_y_pts = []
         min_y_pts = []
         min_y_VAL = []
@@ -95,10 +98,10 @@ class LaneProcessing():
                 self.M = np.array(cv2.getPerspectiveTransform(src, dst))
 
                 self._warp_full_lane_pts()
-                pt1 = self.warped_fullpts[2][0]
-                pt2 = self.warped_fullpts[2][-1]
-                pt3 = self.warped_fullpts[3][0]
-                pt4 = self.warped_fullpts[3][-1]
+                pt1 = self.warped_fullpts[0][0]
+                pt2 = self.warped_fullpts[0][-1]
+                pt3 = self.warped_fullpts[1][0]
+                pt4 = self.warped_fullpts[1][-1]
                 line1 = np.poly1d(np.polyfit([pt1[1],pt2[1]],[pt1[0],pt2[0]],deg=1))
                 line2 = np.poly1d(np.polyfit([pt3[1],pt4[1]],[pt3[0],pt4[0]],deg=1))
                 error = abs(line2(self.max_lane_y)-line1(self.max_lane_y)) - abs(line2(0)-line1(0))
@@ -120,7 +123,7 @@ class LaneProcessing():
 
         def click_event(event, x, y, flags, params):
             if event == cv2.EVENT_LBUTTONDOWN:
-                cv2.circle(cv_frame, [x,y], 5, (0, 0, 255), -1)
+                cv2.circle(cv_frame, tuple([x,y]), 5, (0, 0, 255), -1)
                 cv2.imshow('y_calibration_tool', cv_frame)
                 process_pts([x,y])
         
@@ -273,4 +276,4 @@ class DualLanesToTrajectory():
 
     def get_spline(self):
         x_center, y_center = self.centerpoints
-        return UnivariateSpline(y_center, x_center)
+        return np.poly1d(np.polyfit(y_center, x_center, deg=2))
