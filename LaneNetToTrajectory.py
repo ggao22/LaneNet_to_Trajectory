@@ -1,3 +1,4 @@
+from concurrent.futures import process
 import numpy as np
 from scipy.interpolate import UnivariateSpline
 import math
@@ -7,8 +8,7 @@ import cv2
 class LaneProcessing():
     """Takes in LaneNet's raw output vectors and process then into left to right ordered lanes"""
 
-    def __init__(self,full_lane_pts,image_width,image_height,max_lane_y=420,WARP_RADIUS=64):
-        self.full_lane_pts = full_lane_pts
+    def __init__(self,image_width,image_height,max_lane_y=420,WARP_RADIUS=20,WP_TO_M_Coeff=[1,1]):
         self.image_width = image_width
         self.image_height = image_height
         self.max_lane_y = max_lane_y
@@ -16,11 +16,23 @@ class LaneProcessing():
         self.M = np.empty(shape=(0,0))
 
         # Warped Pixel to Meter Conversion Coeff.
-        self.WP_TO_M_Coeff = [1,1]
+        self.WP_TO_M_Coeff = WP_TO_M_Coeff
 
-        if self.full_lane_pts:
-            self._full_lanes_transformation()
-            self._ordering_lanes()
+    def process_next_lane(self, full_lane_pts):
+        self.full_lane_pts = full_lane_pts
+        self._full_lanes_transformation()
+        self._ordering_lanes()
+
+    def get_physical_fullpts(self):
+        self._warp_full_lane_pts()
+        self.physical_fullpts = []
+        for lane in self.warped_fullpts:
+            physical_lane = lane * self.WP_TO_M_Coeff
+            self.physical_fullpts.append(physical_lane)
+        return self.physical_fullpts
+
+    def get_full_lane_pts(self):
+        return self.full_lane_pts
 
     def _ordering_lanes(self):
         max_y_pts = []
@@ -63,11 +75,11 @@ class LaneProcessing():
             self.full_lane_pts[i][:,0] = np.take_along_axis(self.full_lane_pts[i][:,0], idx[:,1], axis=0)
             self.full_lane_pts[i][:,1] = np.take_along_axis(self.full_lane_pts[i][:,1], idx[:,1], axis=0)
 
-    def get_full_lane_pts(self):
-        return self.full_lane_pts
-
     def auto_warp_radius_calibration(self,FRAME_BOTTOM_PHYSICAL_WIDTH=None):
-        """Auto calibrates the warp radius given lane lines of straight line lanes"""
+        """
+        Auto calibrates the warp radius given lane lines of straight line lanes.
+        FRAME_BOTTOM_PHYSICAL_WIDTH given in meters.
+        """
         if len(self.full_lane_pts) >= 2:
 
             Y_MAX_CUTOFF = self.max_lane_y
@@ -89,22 +101,48 @@ class LaneProcessing():
                 pt4 = self.warped_fullpts[3][-1]
                 line1 = np.poly1d(np.polyfit([pt1[1],pt2[1]],[pt1[0],pt2[0]],deg=1))
                 line2 = np.poly1d(np.polyfit([pt3[1],pt4[1]],[pt3[0],pt4[0]],deg=1))
-                error = abs(line2(self.max_lane_y)-line1(self.max_lane_y)) - abs(line2(0)-line1(0)) # vector
+                error = abs(line2(self.max_lane_y)-line1(self.max_lane_y)) - abs(line2(0)-line1(0))
                 warp_r_temp += error/6.0
-
-                print(self.WARP_RADIUS)
-            #     print(error)
-
-            # import matplotlib.pyplot as plt
-            # y = np.linspace(0, 480, 100)
-            # plt.plot(line1(y),y)
-            # plt.plot(line2(y),y)
 
             if FRAME_BOTTOM_PHYSICAL_WIDTH:
                 self.WP_TO_M_Coeff[0] = FRAME_BOTTOM_PHYSICAL_WIDTH/(self.WARP_RADIUS*2)
 
         else:
             raise
+
+    def y_dist_calibration_tool(self, cv_frame):
+        '''
+        Mark points on the screen parallel to car that are 1 meter in distance in the physical world.
+        Alert: Do auto_warp_radius_calibration before y_dist_calibration_tool to get the correct warp radius.
+        '''
+
+        double_point = []
+
+        def click_event(event, x, y, flags, params):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                cv2.circle(cv_frame, [x,y], 5, (0, 0, 255), -1)
+                cv2.imshow('y_calibration_tool', cv_frame)
+                process_pts([x,y])
+        
+        def process_pts(pts):
+            if len(double_point) < 1:
+                double_point.append(pts)
+            else:
+                double_point.append(pts)
+
+                self.temp_full_lanes = self.full_lane_pts
+                self.full_lane_pts = [np.array(double_point)]
+
+                self._warp_full_lane_pts()
+                self.WP_TO_M_Coeff[1] = 1.0 / abs(self.warped_fullpts[0][0,1] - self.warped_fullpts[0][1,1])
+
+                self.full_lane_pts = self.temp_full_lanes
+                self._warp_full_lane_pts()
+        
+        cv2.imshow('y_calibration_tool', cv_frame)
+        cv2.setMouseCallback('y_calibration_tool', click_event)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     def _warp_full_lane_pts(self):
         appended_lane = []
@@ -127,23 +165,10 @@ class LaneProcessing():
                 warped_lane.append([f[0]/f[2], f[1]/f[2]])
             self.warped_fullpts.append(np.array(warped_lane))
         
-        
     def get_wp_to_m_coeff(self):
         return self.WP_TO_M_Coeff
 
-    def get_physical_fullpts(self):
-        self._warp_full_lane_pts()
-        # import matplotlib.pyplot as plt
-        self.physical_fullpts = []
-        for lane in self.warped_fullpts:
-            # print(lane)
-            physical_lane = lane * self.WP_TO_M_Coeff
-            # print(physical_lane)
-            # print()
-            # plt.scatter(physical_lane[:,0],physical_lane[:,1])
-            self.physical_fullpts.append(physical_lane)
-
-        return self.physical_fullpts
+    
 
 
 class DualLanesToTrajectory():
@@ -240,14 +265,11 @@ class DualLanesToTrajectory():
             self._cal_centerpts_pairs()
             self._cal_centerpts()
 
-
     def get_centerpoints(self):
         return self.centerpoints
 
-
     def get_matching_points(self):
         return self.matching_pts
-
 
     def get_spline(self):
         x_center, y_center = self.centerpoints

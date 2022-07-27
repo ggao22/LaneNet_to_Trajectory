@@ -136,6 +136,12 @@ full_lanenet_output = [np.array([[482, 248],
        [ 21, 361]])]
 
 
+
+# , np.array([[640-16.68,720],
+#        [0, 720-485],
+#        [1280, 720-485],
+#        [640+16.68, 720]])
+
 import time
 
 t1 = time.time()
@@ -143,7 +149,8 @@ t1 = time.time()
 image_width = 1280.0
 image_height = 720.0
 
-lp = LaneProcessing(full_lanenet_output,image_width,image_height,max_lane_y=480,WARP_RADIUS=20)
+lp = LaneProcessing(image_width,image_height,max_lane_y=480,WARP_RADIUS=20)
+lp.process_next_lane(full_lanenet_output)
 full_lane_pts = lp.get_full_lane_pts()
 
 
@@ -153,22 +160,24 @@ for lane in full_lane_pts:
 
 lp.auto_warp_radius_calibration(FRAME_BOTTOM_PHYSICAL_WIDTH=4.0)
 
+img = cv2.imread('0.jpg') 
+lp.y_dist_calibration_tool(img)
 print(lp.get_wp_to_m_coeff())
 
 plt.subplot(212)
 physical_fullpts = lp.get_physical_fullpts()
+# physical_fullpts = lp.warped_fullpts
 
 print(f"Warp done in {time.time()-t1} seconds.")
 
 for lane in physical_fullpts:
     plt.scatter(lane[:,0],lane[:,1])
 
-
 trajectories = []
 centerpoints = []
 for i in range(len(physical_fullpts)):
     if not i: continue
-    traj = DualLanesToTrajectory(physical_fullpts[i-1],physical_fullpts[i])
+    traj = DualLanesToTrajectory(physical_fullpts[i-1],physical_fullpts[i],N_centerpts=20)
     trajectories.append(traj)
     centerpoints.append(traj.get_centerpoints())
 
@@ -177,5 +186,12 @@ for i in range(len(physical_fullpts)):
     plt.scatter(centerpoints[i][0],centerpoints[i][1])
 
 plt.show()  
+
+
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+print(centerpoints)
+
+
 
 
